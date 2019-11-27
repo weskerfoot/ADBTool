@@ -48,11 +48,68 @@ proc rollBytes(bs : string) : uint32 =
     n = n or pair.b.uint32 shl pair.a
   n
 
-proc parseStat(statResult : string) : FileStat =
+proc syncMode(): Socket =
+  let socket = adbConnect()
+  socket.send("host:transport-usb".makeMsg)
+  discard socket.recv(1024)
+
+  echo "Trying to set sync mode"
+  socket.send("sync:".makeMsg)
+  discard socket.recv(1024).parseAdb.get
+
+  socket
+
+proc recvFile(filename : string) : Option[string] =
+  # TODO handle more than one chunk :)
+  let socket : Socket = syncMode()
+
+  echo fmt"Trying to receive the file {filename}"
+
+  let filenameLen : string = filename.len.uint32.unrollBytes
+
+  socket.send("RECV" & filenameLen & filename)
+
+  let recvResult = socket.recv(8) # 64 kb + 8 bytes
+
+  echo "received the chunk"
+
+  let status = recvResult[0..3]
+
+  if status == "FAIL":
+    # Return early if we failed
+    socket.close()
+    return none(string)
+
+  echo "Getting the file length"
+  let fileLen = recvResult[4..7].rollBytes.int
+
+  assert(fileLen <= 0xffff, "File Length Should be <=65535!")
+
+  let recvBody = socket.recv(fileLen) # max 64kb length
+
+  echo "Getting the file body"
+  let fileBody = recvBody[0..fileLen-1]
+
+  socket.close()
+  return some(fileBody)
+
+proc statFile(filename : string) : FileStat =
+  let socket : Socket = syncMode()
+
+  echo fmt"Trying to stat the file {filename}"
+
+  let filenameLen : string = filename.len.uint32.unrollBytes
+
+  socket.send("STAT" & filenameLen & filename)
+
+  let statResult : string = socket.recv(1024)
+
   let command = map(statResult[0..3], proc (c : char) : string = $char(c)).join
   let fileMode = statResult[4..7].rollBytes.BiggestInt
   let fileSize = statResult[8..11].rollBytes
   let fileCreated = statResult[12..15].rollBytes.int64.fromUnix
+
+  socket.close()
 
   FileStat(androidFileMode: fileMode,
            androidFileSize: fileSize,
@@ -60,24 +117,10 @@ proc parseStat(statResult : string) : FileStat =
 
 proc adbPull(filename : string) : string =
   echo filename.len
-  let socket = adbConnect()
-  socket.send("host:transport-usb".makeMsg)
-  discard socket.recv(1024)
+  echo filename.statFile.repr
 
-  echo "Trying to set sync mode"
-  socket.send("sync:".makeMsg)
+  echo filename.recvFile
 
-  discard socket.recv(1024).parseAdb.get
-
-  echo fmt"Trying to stat the file {filename}"
-
-  let length : string = filename.len.uint32.unrollBytes
-
-  socket.send("STAT" & length & filename)
-
-  echo socket.recv(1024).parseStat.repr
-
-  socket.close()
   return ""
 
 proc sendAdb(payload : string) : string =
@@ -111,7 +154,7 @@ discard execCmd("adb start-server")
 #else:
   #echo devices.get()
 
-echo adbPull("/system/lib/libz.so")
+echo adbPull("/etc/whitelistedapps.xml")
 
 #discard rebootPhone()
 
