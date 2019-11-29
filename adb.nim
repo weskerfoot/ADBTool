@@ -6,6 +6,12 @@ type FileStat = ref object of RootObj
   androidFileSize : uint32
   androidFileModified : Time
 
+proc recvExactly(socket : Socket, length : int) : string =
+  var buf = ""
+  while (buf.len != length):
+    buf = buf & socket.recv(length - buf.len)
+  buf
+
 proc parseAdb(resp : string) : Option[string] =
   if resp.len == 0:
     return none(string)
@@ -51,10 +57,10 @@ proc rollBytes(bs : string) : uint32 =
 proc syncMode(): Socket =
   let socket = adbConnect()
   socket.send("host:transport-usb".makeMsg)
-  discard socket.recv(1024)
+  discard socket.recvExactly(4)
 
   socket.send("sync:".makeMsg)
-  discard socket.recv(1024).parseAdb.get
+  discard socket.recvExactly(4).parseAdb.get
 
   socket
 
@@ -79,7 +85,7 @@ proc recvFile(filename : string) : Option[string] =
       socket.close()
       return none(string)
 
-    recvResult = socket.recv(8) # 64 kb + 8 bytes
+    recvResult = socket.recvExactly(8) # 64 kb + 8 bytes
 
     status = recvResult[0..3]
     fileLen = recvResult[4..7].rollBytes.int
@@ -92,13 +98,11 @@ proc recvFile(filename : string) : Option[string] =
     assert(status == "DATA")
     assert(fileLen <= 0xffff and fileLen > 0, "File Length Should be <=65535 and > 0")
 
-    # now we have to recv until we have exactly `fileLen` bytes
-    while (recvBody.len != fileLen):
-      recvBody = recvBody & socket.recv(fileLen - recvBody.len)
+    recvBody = socket.recvExactly(fileLen)
 
     assert(recvBody.len == fileLen)
 
-    fileBody = recvBody[0..^1]
+    fileBody = recvBody[0..fileLen - 1]
     buf = buf & fileBody
 
   assert(status == "DONE")
@@ -128,8 +132,8 @@ proc statFile(filename : string) : FileStat =
            androidFileModified: fileCreated)
 
 proc adbPull(filename : string) : string =
-  #echo filename.len
-  #echo filename.statFile.repr
+  stderr.write filename.len
+  stderr.write filename.statFile.repr
 
   return filename.recvFile.get
 
@@ -137,13 +141,14 @@ proc sendAdb(payload : string) : string =
   var socket = adbConnect()
   socket.send("host:transport-usb".makeMsg)
 
-  discard socket.recv(1024)
+  discard socket.recvExactly(4)
 
   socket.send(payload)
 
   var response = ""
 
   while (var chunk = socket.recv(1024); chunk != ""):
+    # receive chunks until it returns nothing
     response = response & chunk
 
   socket.close()
