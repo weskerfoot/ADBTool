@@ -75,7 +75,6 @@ proc listDir(filename : string) : seq[FileStat] =
   let filenameLen : string = filename.len.uint32.unrollBytes
 
   var dirents : seq[FileStat] = @[]
-
   var dirent : string
   var status : string
 
@@ -145,7 +144,7 @@ proc recvFile(filename : string) : Option[string] =
   socket.close()
   return some(buf)
 
-proc statFile(filename : string) : FileStat =
+proc statFile(filename : string) : Option[FileStat] =
   # Enter sync mode
   let socket : Socket = syncMode()
 
@@ -162,18 +161,41 @@ proc statFile(filename : string) : FileStat =
 
   socket.close()
 
-  FileStat(androidFileName: filename,
-           androidFileMode: fileMode,
-           androidFileSize: fileSize,
-           androidFileModified: fileCreated)
+  if (fileMode != 0 and fileSize != 0):
+    some(FileStat(androidFileName: filename,
+                  androidFileMode: fileMode,
+                  androidFileSize: fileSize,
+                  androidFileModified: fileCreated))
+  else:
+    none(FileStat)
 
-proc adbPull(filename : string) : AndroidFile =
+proc sendFile(buf : string, filename : string) : bool =
   let stat = filename.statFile
+  
+  if stat.isSome:
+    # never overwrite files
+    # TODO add optional parameter to disable this
+    return false
+
+  let fileMode = fromOct[int]("0771")
+
+  let remoteFileName = fmt"{filename},{fileMode}"
+
+  echo remoteFileName
+
+  return true
+  
+
+proc adbPull(filename : string) : Option[AndroidFile] =
+  let stat = filename.statFile
+  if stat.isNone:
+    return none(AndroidFile)
+
   let fileBlob = filename.recvFile.get("")
 
-  AndroidFile(androidFileName: filename,
-              androidFileStat: stat,
-              androidFile: fileBlob)
+  some(AndroidFile(androidFileName: filename,
+                   androidFileStat: stat.get,
+                   androidFile: fileBlob))
 
 proc sendAdb(payload : string) : string =
   var socket = adbConnect()
@@ -209,7 +231,9 @@ discard execCmd("adb start-server")
 
 #stdout.write adbPull("/etc/hosts").repr
 
-echo listDir("/etc").map(proc(f: FileStat) : string = f.androidFileName)
+#echo listDir("/etc").map(proc(f: FileStat) : string = f.androidFileName)
+
+echo sendFile("", "/storage/7AFD-17E3/test2.opus")
 
 #discard rebootPhone()
 
