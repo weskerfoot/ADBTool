@@ -6,6 +6,11 @@ type FileStat = ref object of RootObj
   androidFileSize : uint32
   androidFileModified : Time
 
+type AndroidFile = ref object of RootObj
+  androidFileName : string
+  androidFileStat : FileStat
+  androidFile : string
+
 proc recvExactly(socket : Socket, length : int) : string =
   var buf = ""
   while (buf.len != length):
@@ -80,11 +85,6 @@ proc recvFile(filename : string) : Option[string] =
   var buf = ""
 
   while (status != "DONE"):
-    if status == "FAIL":
-      # Return early if we failed
-      socket.close()
-      return none(string)
-
     recvResult = socket.recvExactly(8) # 64 kb + 8 bytes
 
     status = recvResult[0..3]
@@ -92,6 +92,11 @@ proc recvFile(filename : string) : Option[string] =
 
     if (fileLen == 0 or status == "DONE"):
       break
+
+    if status == "FAIL":
+      # Return early if we failed
+      socket.close()
+      return none(string)
 
     recvBody = ""
 
@@ -131,11 +136,14 @@ proc statFile(filename : string) : FileStat =
            androidFileSize: fileSize,
            androidFileModified: fileCreated)
 
-proc adbPull(filename : string) : string =
-  stderr.write filename.len
-  stderr.write filename.statFile.repr
+proc adbPull(filename : string) : AndroidFile =
+  let stat = filename.statFile
+  let fileBlob = filename.recvFile.get("")
 
-  return filename.recvFile.get
+  AndroidFile(androidFileName: filename,
+              androidFileStat: stat,
+              androidFile: fileBlob)
+
 
 proc sendAdb(payload : string) : string =
   var socket = adbConnect()
@@ -169,7 +177,7 @@ discard execCmd("adb start-server")
 #else:
   #echo devices.get()
 
-stdout.write adbPull("/storage/7AFD-17E3/muzak/German Cake Rave-yMvDi_lXiQc.opus")
+stdout.write adbPull("/etc/hosts").repr
 
 #discard rebootPhone()
 
