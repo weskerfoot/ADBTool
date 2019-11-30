@@ -1,4 +1,4 @@
-import net, strutils, parseutils, strformat, osproc, system, sequtils, times
+import net, strutils, parseutils, strformat, osproc, system, sequtils, times, math, sugar
 import options except map
 
 type FileStat = ref object of RootObj
@@ -11,6 +11,10 @@ type AndroidFile = ref object of RootObj
   androidFileName : string
   androidFileStat : FileStat
   androidFile : string
+
+proc chunkString(buf : string) : seq[string] =
+  let chunkNum = (buf.len / (2^16-1)).ceil.BiggestInt
+  buf.toSeq.distribute(chunkNum, false).map(chunk => chunk.map(c => $char(c)).join)
 
 proc recvExactly(socket : Socket, length : int) : string =
   var buf = ""
@@ -51,7 +55,7 @@ proc adbConnect() : Socket =
 proc unrollBytes(n : uint32) : string =
   let shifts : seq[uint32] = @[0'u32, 8'u32, 16'u32, 24'u32]
   # shift each byte right by a certain amount and mask off the least-significant byte
-  map(shifts, proc (shift : uint32) : string = $char((n shr shift) and 0x000000ff)).join
+  map(shifts, shift => $char((n shr shift) and 0x000000ff)).join
 
 proc rollBytes(bs : string) : uint32 =
   let shifts : seq[uint32] = @[0'u32, 8'u32, 16'u32, 24'u32]
@@ -113,7 +117,7 @@ proc recvFile(filename : string) : Option[string] =
   var buf = ""
 
   while (status != "DONE"):
-    recvResult = socket.recvExactly(8) # 64 kb + 8 bytes
+    recvResult = socket.recvExactly(8)
 
     status = recvResult[0..3]
     fileLen = recvResult[4..7].rollBytes.int
@@ -154,7 +158,7 @@ proc statFile(filename : string) : Option[FileStat] =
 
   let statResult : string = socket.recvExactly(16)
 
-  let command = map(statResult[0..3], proc (c : char) : string = $char(c)).join
+  let command = map(statResult[0..3], c => $char(c)).join
   let fileMode = statResult[4..7].rollBytes.BiggestInt
   let fileSize = statResult[8..11].rollBytes
   let fileCreated = statResult[12..15].rollBytes.int64.fromUnix
@@ -181,6 +185,8 @@ proc sendFile(buf : string, filename : string) : bool =
 
   let remoteFileName = fmt"{filename},{fileMode}"
 
+  let chunks = buf.chunkString
+
   echo remoteFileName
 
   return true
@@ -197,7 +203,7 @@ proc adbPull(filename : string) : Option[AndroidFile] =
                    androidFileStat: stat.get,
                    androidFile: fileBlob))
 
-proc sendAdb(payload : string) : string =
+proc runCommand(payload : string) : string =
   var socket = adbConnect()
   socket.send("host:transport-usb".makeMsg)
 
@@ -215,14 +221,14 @@ proc sendAdb(payload : string) : string =
   return response
 
 proc rebootPhone() : Option[string] =
-  makeMsg("reboot:").sendAdb.parseAdb
+  makeMsg("reboot:").runCommand.parseAdb
 
 proc listCerts() : string =
-  makeMsg("shell:ls /etc/*").sendAdb.parseAdb.get
+  makeMsg("shell:ls /etc/*").runCommand.parseAdb.get
 
 discard execCmd("adb start-server")
 
-#var devices = makeMsg("host:version").sendAdb.parseAdb
+#var devices = makeMsg("host:version").runCommand.parseAdb
 
 #if devices.isNone:
   #quit(1)
@@ -239,5 +245,5 @@ echo sendFile("", "/storage/7AFD-17E3/test2.opus")
 
 #echo listCerts()
 
-#echo makeMsg("shell:uname -a").sendAdb.parseAdb.get
-#echo makeMsg("shell:ls /system/etc/security/cacerts/*").sendAdb.parseAdb.get
+#echo makeMsg("shell:uname -a").runCommand.parseAdb.get
+#echo makeMsg("shell:ls /system/etc/security/cacerts/*").runCommand.parseAdb.get
