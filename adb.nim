@@ -5,6 +5,7 @@ type FileStat = ref object of RootObj
   androidFileMode : BiggestInt
   androidFileSize : uint32
   androidFileModified : Time
+  androidFileName : string
 
 type AndroidFile = ref object of RootObj
   androidFileName : string
@@ -69,8 +70,36 @@ proc syncMode(): Socket =
 
   socket
 
-proc recvFile(filename : string) : Option[string] =
+proc listDir(filename : string) : seq[FileStat] =
   let socket : Socket = syncMode()
+  let filenameLen : string = filename.len.uint32.unrollBytes
+
+  var dirents : seq[FileStat] = @[]
+
+  var dirent : string
+  var status : string
+
+  socket.send("LIST" & filenameLen & filename)
+
+  while(status = socket.recvExactly(4); status != "DONE"):
+    dirent = socket.recvExactly(16)
+
+    let fileMode = dirent[0..3].rollBytes.BiggestInt
+    let fileSize = dirent[4..7].rollBytes
+    let fileCreated = dirent[8..11].rollBytes.int64.fromUnix
+    let fileNameLen = dirent[12..15].rollBytes.int
+    let direntFileName = socket.recvExactly(filenameLen)
+
+    dirents = dirents & FileStat(androidFileName: direntFileName,
+                                 androidFileMode: fileMode,
+                                 androidFileSize: fileSize,
+                                 androidFileModified: fileCreated)
+  dirents
+
+proc recvFile(filename : string) : Option[string] =
+  # Enter sync mode
+  let socket : Socket = syncMode()
+
   let filenameLen : string = filename.len.uint32.unrollBytes
 
   socket.send("RECV" & filenameLen & filename)
@@ -117,6 +146,7 @@ proc recvFile(filename : string) : Option[string] =
   return some(buf)
 
 proc statFile(filename : string) : FileStat =
+  # Enter sync mode
   let socket : Socket = syncMode()
 
   let filenameLen : string = filename.len.uint32.unrollBytes
@@ -132,7 +162,8 @@ proc statFile(filename : string) : FileStat =
 
   socket.close()
 
-  FileStat(androidFileMode: fileMode,
+  FileStat(androidFileName: filename,
+           androidFileMode: fileMode,
            androidFileSize: fileSize,
            androidFileModified: fileCreated)
 
@@ -143,7 +174,6 @@ proc adbPull(filename : string) : AndroidFile =
   AndroidFile(androidFileName: filename,
               androidFileStat: stat,
               androidFile: fileBlob)
-
 
 proc sendAdb(payload : string) : string =
   var socket = adbConnect()
@@ -177,7 +207,9 @@ discard execCmd("adb start-server")
 #else:
   #echo devices.get()
 
-stdout.write adbPull("/etc/hosts").repr
+#stdout.write adbPull("/etc/hosts").repr
+
+echo listDir("/etc").map(proc(f: FileStat) : string = f.androidFileName)
 
 #discard rebootPhone()
 
