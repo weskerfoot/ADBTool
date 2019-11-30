@@ -123,7 +123,7 @@ proc statFile(filename : string) : FileStat =
 
   socket.send("STAT" & filenameLen & filename)
 
-  let statResult : string = socket.recv(1024)
+  let statResult : string = socket.recvExactly(16)
 
   let command = map(statResult[0..3], proc (c : char) : string = $char(c)).join
   let fileMode = statResult[4..7].rollBytes.BiggestInt
