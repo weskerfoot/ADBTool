@@ -23,7 +23,7 @@ proc chunkString(buf : string) : Option[seq[string]] =
 proc recvExactly(socket : Socket, length : int) : string =
   var buf = ""
   while (buf.len != length):
-    buf = buf & socket.recv(length - buf.len)
+    buf &= socket.recv(length - buf.len)
   buf
 
 proc parseAdb(resp : string) : Option[string] =
@@ -208,7 +208,7 @@ proc sendFile(buf : string, filename : string) : bool =
     let errorMsgLen = socket.recvExactly(4).rollBytes
     let errorMsg = socket.recvExactly(errorMsgLen.int)
 
-    stderr.write (errorMsg & "\n")
+    stderr.writeLine errorMsg
     socket.close()
 
     return false
@@ -241,7 +241,7 @@ proc runCommand(payload : string) : string =
 
   while (var chunk = socket.recv(1024); chunk != ""):
     # receive chunks until it returns nothing
-    response = response & chunk
+    response &= chunk
 
   socket.close()
   return response
