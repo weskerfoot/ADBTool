@@ -106,14 +106,12 @@ proc listDir(filename : string) : seq[FileStat] =
 proc recvFile(filename : string) : Option[string] =
   # Enter sync mode
   let socket : Socket = syncMode()
-
   let filenameLen : string = filename.len.uint32.unrollBytes
 
   socket.send("RECV" & filenameLen & filename)
 
   var recvResult : string
   var status : string = ""
-
   var fileBody : string
   var recvBody : string
   var fileLen : int
@@ -121,8 +119,7 @@ proc recvFile(filename : string) : Option[string] =
   var buf = ""
 
   while (status != "DONE"):
-    recvResult = socket.recvExactly(8) # 64 kb + 8 bytes
-
+    recvResult = socket.recvExactly(8)
     status = recvResult[0..3]
     fileLen = recvResult[4..7].rollBytes.int
 
@@ -144,7 +141,7 @@ proc recvFile(filename : string) : Option[string] =
     assert(recvBody.len == fileLen)
 
     fileBody = recvBody[0..fileLen - 1]
-    buf = buf & fileBody
+    buf &= fileBody
 
   assert(status == "DONE")
   assert(fileLen == 0)
