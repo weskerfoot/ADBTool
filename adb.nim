@@ -97,10 +97,10 @@ proc listDir(filename : string) : seq[FileStat] =
     let fileNameLen = dirent[12..15].rollBytes.int
     let direntFileName = socket.recvExactly(filenameLen)
 
-    dirents = dirents & FileStat(androidFileName: direntFileName,
-                                 androidFileMode: fileMode,
-                                 androidFileSize: fileSize,
-                                 androidFileModified: fileCreated)
+    dirents &= FileStat(androidFileName: direntFileName,
+                        androidFileMode: fileMode,
+                        androidFileSize: fileSize,
+                        androidFileModified: fileCreated)
   dirents
 
 proc recvFile(filename : string) : Option[string] =
@@ -177,7 +177,7 @@ proc statFile(filename : string) : Option[FileStat] =
   else:
     none(FileStat)
 
-proc sendFile(buf : string, filename : string) : bool =
+proc adbSend(buf : string, filename : string) : bool =
   let stat = filename.statFile
   
   if stat.isSome:
@@ -252,24 +252,7 @@ proc rebootPhone() : Option[string] =
 proc listCerts() : string =
   makeMsg("shell:ls /etc/*").runCommand.parseAdb.get
 
+proc devices() : Option[string] =
+  makeMsg("host:version").runCommand.parseAdb
+
 discard execCmd("adb start-server")
-
-#var devices = makeMsg("host:version").runCommand.parseAdb
-
-#if devices.isNone:
-  #quit(1)
-#else:
-  #echo devices.get()
-
-#stdout.write adbPull("/etc/hosts").repr
-
-#echo listDir("/etc").map(proc(f: FileStat) : string = f.androidFileName)
-
-echo sendFile("YOLO\n", "/storage/7AFD-17E3/testmyshit")
-
-#discard rebootPhone()
-
-#echo listCerts()
-
-#echo makeMsg("shell:uname -a").runCommand.parseAdb.get
-#echo makeMsg("shell:ls /system/etc/security/cacerts/*").runCommand.parseAdb.get
