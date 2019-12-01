@@ -1,4 +1,5 @@
-import net, strutils, parseutils, strformat, osproc, system, sequtils, times, math, sugar
+import net, strutils, parseutils, strformat, osproc, sequtils
+import system, times, math, sugar
 import options except map
 
 type FileStat = ref object of RootObj
@@ -12,9 +13,12 @@ type AndroidFile = ref object of RootObj
   androidFileStat : FileStat
   androidFile : string
 
-proc chunkString(buf : string) : seq[string] =
+proc chunkString(buf : string) : Option[seq[string]] =
+  if buf.len == 0:
+    return none(seq[string])
+
   let chunkNum = (buf.len / (2^16-1)).ceil.BiggestInt
-  buf.toSeq.distribute(chunkNum, false).map(chunk => chunk.map(c => $char(c)).join)
+  some(buf.toSeq.distribute(chunkNum, false).map(chunk => chunk.map(c => $char(c)).join))
 
 proc recvExactly(socket : Socket, length : int) : string =
   var buf = ""
@@ -117,7 +121,7 @@ proc recvFile(filename : string) : Option[string] =
   var buf = ""
 
   while (status != "DONE"):
-    recvResult = socket.recvExactly(8)
+    recvResult = socket.recvExactly(8) # 64 kb + 8 bytes
 
     status = recvResult[0..3]
     fileLen = recvResult[4..7].rollBytes.int
@@ -178,20 +182,42 @@ proc sendFile(buf : string, filename : string) : bool =
   
   if stat.isSome:
     # never overwrite files
-    # TODO add optional parameter to disable this
+    # TODO add optional parameter to disable this?
     return false
 
+  # Enter sync mode
+  let socket : Socket = syncMode()
   let fileMode = fromOct[int]("0771")
-
-  let remoteFileName = fmt"{filename},{fileMode}"
-
+  let lmtime = getTime().toUnix.uint32.unrollBytes
+  let remoteFileName = fmt"{filename},{fileMode:04o}"
   let chunks = buf.chunkString
 
-  echo remoteFileName
+  if chunks.isNone:
+    return false
 
+  socket.send("SEND" & remoteFileName.len.uint32.unrollBytes & remoteFileName)
+
+  for chunk in chunks.get:
+    socket.send("DATA" & chunk.len.uint32.unrollBytes & chunk)
+
+  socket.send("DONE" & lmtime)
+
+  let serverResp = socket.recvExactly(4)
+
+  if serverResp == "FAIL":
+    let errorMsgLen = socket.recvExactly(4).rollBytes
+    let errorMsg = socket.recvExactly(errorMsgLen.int)
+
+    stderr.write (errorMsg & "\n")
+    socket.close()
+
+    return false
+
+  assert(serverResp == "OKAY")
+
+  socket.close()
   return true
   
-
 proc adbPull(filename : string) : Option[AndroidFile] =
   let stat = filename.statFile
   if stat.isNone:
@@ -239,7 +265,7 @@ discard execCmd("adb start-server")
 
 #echo listDir("/etc").map(proc(f: FileStat) : string = f.androidFileName)
 
-echo sendFile("", "/storage/7AFD-17E3/test2.opus")
+echo sendFile("YOLO\n", "/storage/7AFD-17E3/testmyshit")
 
 #discard rebootPhone()
 
