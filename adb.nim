@@ -33,8 +33,8 @@ proc parseAdb(resp : string) : Option[string] =
   var msg_len : int
   var offset : int
 
-  var status = resp[0..3]
-  var loc = parseHex(resp, msg_len, 4, 4)
+  let status = resp[0..3]
+  let loc = parseHex(resp, msg_len, 4, 4)
 
   if msg_len > 0:
     offset = loc + 4 + msg_len - 1
@@ -52,7 +52,7 @@ proc makeMsg(msg : string) : string =
   fmt"{msg.len:04x}{msg}"
 
 proc adbConnect() : Socket =
-  var socket = newSocket(buffered=false)
+  let socket = newSocket(buffered=false)
   socket.connect("127.0.0.1", Port(5037))
   socket
 
@@ -227,7 +227,7 @@ proc adbPull(filename : string) : Option[AndroidFile] =
                    androidFile: fileBlob))
 
 proc runCommand(payload : string) : string =
-  var socket = adbConnect()
+  let socket = adbConnect()
   socket.send("host:transport-usb".makeMsg)
 
   discard socket.recvExactly(4)
@@ -254,5 +254,6 @@ proc devices() : Option[string] =
 
 discard execCmd("adb start-server")
 
-echo adbSend("This\nIs\nA\nTest\n", "/storage/7AFD-17E3/testmyshit", "777")
-echo adbPull("/storage/7AFD-17E3/testmyshit").get.androidFile
+discard adbSend("./test.opus".readFile, "/storage/7AFD-17E3/cakerave.opus", "777")
+
+"./cakerave.opus".writeFile(adbPull("/storage/7AFD-17E3/testmyshit").get.androidFile)
