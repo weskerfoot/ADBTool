@@ -177,7 +177,7 @@ proc statFile(filename : string) : Option[FileStat] =
   else:
     none(FileStat)
 
-proc adbSend(buf : string, filename : string) : bool =
+proc adbSend(buf : string, filename : string, permissions : string) : bool =
   let stat = filename.statFile
   
   if stat.isSome:
@@ -187,7 +187,7 @@ proc adbSend(buf : string, filename : string) : bool =
 
   # Enter sync mode
   let socket : Socket = syncMode()
-  let fileMode = fromOct[int]("0771")
+  let fileMode = fromOct[int](fmt"0{permissions}")
   let lmtime = getTime().toUnix.uint32.unrollBytes
   let remoteFileName = fmt"{filename},{fileMode:04o}"
   let chunks = buf.chunkString
@@ -256,3 +256,6 @@ proc devices() : Option[string] =
   makeMsg("host:version").runCommand.parseAdb
 
 discard execCmd("adb start-server")
+
+echo adbSend("This\nIs\nA\nTest\n", "/storage/7AFD-17E3/testmyshit", "777")
+echo adbPull("/storage/7AFD-17E3/testmyshit").get.androidFile
