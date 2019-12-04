@@ -11,7 +11,7 @@ type FileStat = ref object of RootObj
 type AndroidFile = ref object of RootObj
   androidFileName : string
   androidFileStat : FileStat
-  androidFile : string
+  androidFileContents : string
 
 proc chunkString(buf : string) : Option[seq[string]] =
   if buf.len == 0:
@@ -46,7 +46,7 @@ proc parseAdb(resp : string) : Option[string] =
   if status == "FAIL":
     stderr.writeLine(msg)
     return none(string)
-  return some(msg)
+  some(msg)
 
 proc makeMsg(msg : string) : string =
   fmt"{msg.len:04x}{msg}"
@@ -147,7 +147,7 @@ proc recvFile(filename : string) : Option[string] =
   assert(fileLen == 0)
 
   socket.close()
-  return some(buf)
+  some(buf)
 
 proc statFile(filename : string) : Option[FileStat] =
   # Enter sync mode
@@ -174,12 +174,15 @@ proc statFile(filename : string) : Option[FileStat] =
   else:
     none(FileStat)
 
-proc adbSend(buf : string, filename : string, permissions : string) : bool =
+proc adbSend(buf : string,
+             filename : string,
+             permissions : string,
+             overwrite = false) : bool =
+
   let stat = filename.statFile
   
-  if stat.isSome:
-    # never overwrite files
-    # TODO add optional parameter to disable this?
+  if stat.isSome and (not overwrite):
+    # never overwrite files unless asked to
     return false
 
   # Enter sync mode
@@ -213,7 +216,7 @@ proc adbSend(buf : string, filename : string, permissions : string) : bool =
   assert(serverResp == "OKAY")
 
   socket.close()
-  return true
+  true
   
 proc adbPull(filename : string) : Option[AndroidFile] =
   let stat = filename.statFile
@@ -224,7 +227,7 @@ proc adbPull(filename : string) : Option[AndroidFile] =
 
   some(AndroidFile(androidFileName: filename,
                    androidFileStat: stat.get,
-                   androidFile: fileBlob))
+                   androidFileContents: fileBlob))
 
 proc runCommand(payload : string) : string =
   let socket = adbConnect()
@@ -241,7 +244,7 @@ proc runCommand(payload : string) : string =
     response &= chunk
 
   socket.close()
-  return response
+  response
 
 proc rebootPhone() : Option[string] =
   makeMsg("reboot:").runCommand.parseAdb
@@ -254,6 +257,5 @@ proc devices() : Option[string] =
 
 discard execCmd("adb start-server")
 
-discard adbSend("./test.opus".readFile, "/storage/7AFD-17E3/cakerave.opus", "777")
-
-"./cakerave.opus".writeFile(adbPull("/storage/7AFD-17E3/testmyshit").get.androidFile)
+#discard adbSend("./test.opus".readFile, "/storage/7AFD-17E3/cakerave.opus", "777")
+#"./cakerave.opus".writeFile(adbPull("/storage/7AFD-17E3/testmyshit").get.androidFileContents)
