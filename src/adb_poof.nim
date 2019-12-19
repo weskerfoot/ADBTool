@@ -1,5 +1,5 @@
 import net, strutils, parseutils, strformat, osproc, sequtils
-import system, times, math, sugar
+import system, times, math, sugar, os, streams
 import options except map
 
 type FileStat = ref object of RootObj
@@ -250,12 +250,26 @@ proc rebootPhone() : Option[string] =
   makeMsg("reboot:").runCommand.parseAdb
 
 proc listCerts() : string =
-  makeMsg("shell:ls /etc/*").runCommand.parseAdb.get
+  makeMsg("shell:ls -1a /etc/security/cacerts/*").runCommand.parseAdb.get
 
 proc devices() : Option[string] =
   makeMsg("host:version").runCommand.parseAdb
 
 discard execCmd("adb start-server")
 
-#discard adbSend("./test.opus".readFile, "/storage/7AFD-17E3/cakerave.opus", "777")
-#"./cakerave.opus".writeFile(adbPull("/storage/7AFD-17E3/testmyshit").get.androidFileContents)
+proc parseCerts() =
+  for cacert in listCerts().split("\n"):
+    let certfile = adbPull(cacert)
+    if certfile.isSome:
+      let filename = cacert.extractFilename
+      echo "Downloading " & filename
+      var fileContents = certfile.get.androidFileContents
+      var certFileStream = fileContents.newStringStream
+
+proc pemRead(fp : pointer,
+             x : pointer,
+             pem_password_cb : pointer,
+             u : pointer) : pointer {.cdecl, dynlib: "libssl.so", importc.}
+
+
+parseCerts()
