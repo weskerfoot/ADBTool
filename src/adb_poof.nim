@@ -255,8 +255,6 @@ proc listCerts() : string =
 proc devices() : Option[string] =
   makeMsg("host:version").runCommand.parseAdb
 
-discard execCmd("adb start-server")
-
 proc parseCerts() =
   for cacert in listCerts().split("\n"):
     let certfile = adbPull(cacert)
@@ -266,10 +264,4 @@ proc parseCerts() =
       var fileContents = certfile.get.androidFileContents
       var certFileStream = fileContents.newStringStream
 
-proc pemRead(fp : pointer,
-             x : pointer,
-             pem_password_cb : pointer,
-             u : pointer) : pointer {.cdecl, dynlib: "libssl.so", importc.}
-
-
-parseCerts()
+proc startServer() = discard execCmd("adb start-server")
