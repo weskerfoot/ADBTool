@@ -5,7 +5,7 @@ author        = "Wesley Kerfoot"
 description   = "Android Debug Bridge Swiss Army Knife"
 license       = "MIT"
 srcDir        = "src"
-bin           = @["adb_poof"]
+bin           = @["adbtool"]
 
 
 
