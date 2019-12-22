@@ -12,3 +12,6 @@ Goals:
 * Ability to safely install a custom CA certificate on your phone, and revoke it.
 * Reverse proxying / MITM your phone.
 * Create a backup of everything accessible (requires root for everything).
+
+### Building
+Simply install `nim` and `nimble` and run `nimble build` to get the binary.
