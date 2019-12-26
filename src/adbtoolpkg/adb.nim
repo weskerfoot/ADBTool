@@ -1,5 +1,6 @@
 import net, strutils, parseutils, strformat, osproc, sequtils
 import system, times, math, sugar, os, streams
+import posix except Time
 import options except map
 
 type FileStat = ref object of RootObj
@@ -175,11 +176,11 @@ proc statFile(filename : string) : Option[FileStat] =
     none(FileStat)
 
 proc adbSend(buf : string,
-             filename : string,
+             destination : string,
              permissions : string,
              overwrite = false) : bool =
 
-  let stat = filename.statFile
+  let stat = destination.statFile
   
   if stat.isSome and (not overwrite):
     # never overwrite files unless asked to
@@ -189,7 +190,7 @@ proc adbSend(buf : string,
   let socket : Socket = syncMode()
   let fileMode = fromOct[int](fmt"0{permissions}")
   let lmtime = getTime().toUnix.uint32.unrollBytes
-  let remoteFileName = fmt"{filename},{fileMode:04o}"
+  let remoteFileName = fmt"{destination},{fileMode:04o}"
   let chunks = buf.chunkString
 
   if chunks.isNone:
@@ -217,7 +218,13 @@ proc adbSend(buf : string,
 
   socket.close()
   true
-  
+
+proc androidCopyFile*(filename : string, dest : string) =
+  var statResult : Stat
+  # See https://stackoverflow.com/a/14325854/903589 for an explanation of the bitmasks
+  let perms = statResult.st_mode.int and (S_IRWXU or S_IRWXG or S_IRWXO)
+  discard filename.readFile.adbSend(dest, fmt"0{perms}", overwrite = true)
+ 
 proc adbPull(filename : string) : Option[AndroidFile] =
   let stat = filename.statFile
   if stat.isNone:
