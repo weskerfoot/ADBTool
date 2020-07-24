@@ -65,7 +65,9 @@ proc unrollBytes(n : uint32) : string =
 proc rollBytes(bs : string) : uint32 =
   let shifts : seq[uint32] = @[0'u32, 8'u32, 16'u32, 24'u32]
   var n : uint32
-  for pair in zip(shifts, bs):
+  let pairs : seq[tuple[a: uint32, b: char]] = zip(shifts, bs)
+
+  for pair in pairs:
     n = n or pair.b.uint32 shl pair.a
   n
 
