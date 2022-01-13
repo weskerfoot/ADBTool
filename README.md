@@ -1,3 +1,5 @@
+# **This repository has moved to [https://git.wesk.tech/wes/ADBWatch](https://git.wesk.tech/wes/ADBWatch)**
+
 ### ADBWatch
 
 A tool to play with the Android Debug Bridge protocol, and do useful things on your Android phone. This is a re-implementation of the clientside part of the ADB wire protocol, with some hopefully useful added functions.
