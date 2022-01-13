@@ -1,4 +1,4 @@
-# **This repository has moved to [https://git.wesk.tech/wes/ADBWatch](https://git.wesk.tech/wes/ADBWatch)**
+# **This repository has moved to [https://git.wesk.tech/wes/ADBTool](https://git.wesk.tech/wes/ADBTool)**
 
 ### ADBWatch
 
